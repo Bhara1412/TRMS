@@ -1,0 +1,13 @@
+{% extends "base.html" %}{% block content %}
+<h1 class="h3">Dashboard</h1><p class="text-muted">{{ user.get_role_display }}</p>
+<div class="row g-3">
+{% if user.role == "COMPANY" %}
+<div class="col-md-6"><div class="card"><div class="card-body"><h5>Company Status</h5>{% if company %}<p class="display-6">{{ company.get_status_display }}</p><p>{{ company.name }}</p>{% endif %}</div></div></div>
+<div class="col-md-6"><div class="card"><div class="card-body"><h5>My Tender Submissions</h5><p class="display-6">{{ my_submissions|length }}</p></div></div></div>
+{% elif user.role == "PROCUREMENT" %}<div class="col-md-6"><div class="card"><div class="card-body"><h5>Registrations Pending</h5><p class="display-6">{{ pending_registrations }}</p></div></div></div>
+{% elif user.role == "EVALUATION" %}<div class="col-md-6"><div class="card"><div class="card-body"><h5>Pending Evaluation</h5><p class="display-6">{{ pending_evaluations }}</p></div></div></div>
+{% elif user.role == "APPROVAL" %}<div class="col-md-6"><div class="card"><div class="card-body"><h5>Approval Actions</h5><p class="display-6">{{ approval_ready }}</p></div></div></div>
+{% elif user.role == "ADMIN" %}<div class="col-md-6"><div class="card"><div class="card-body"><h5>Administration</h5><a class="btn btn-primary" href="{% url 'administration' %}">Open Administration</a></div></div></div>{% endif %}
+</div>
+<div class="card mt-4"><div class="card-body"><h5>Recent Notifications</h5>{% for n in my_notifications %}<div class="border-bottom py-2">{{ n.message }} <small class="text-muted">{{ n.created_at }}</small></div>{% empty %}<p>No notifications.</p>{% endfor %}</div></div>
+{% endblock %}

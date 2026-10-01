@@ -1,0 +1,30 @@
+{% load static %}
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{% block title %}TRMS{% endblock %}</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+<link rel="stylesheet" href="{% static 'css/app.css' %}">
+</head>
+<body>
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark"><div class="container">
+<a class="navbar-brand fw-bold" href="{% url 'dashboard' %}">TRMS</a>
+{% if user.is_authenticated %}
+<button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#nav"><span class="navbar-toggler-icon"></span></button>
+<div class="collapse navbar-collapse" id="nav"><ul class="navbar-nav me-auto">
+<li class="nav-item"><a class="nav-link" href="{% url 'dashboard' %}">Dashboard</a></li>
+{% if user.role == "COMPANY" %}<li class="nav-item"><a class="nav-link" href="{% url 'company_profile' %}">Company Profile</a></li><li class="nav-item"><a class="nav-link" href="{% url 'tender_submission' %}">Tender Submission</a></li>{% endif %}
+{% if user.role == "PROCUREMENT" %}<li class="nav-item"><a class="nav-link" href="{% url 'registration_review' %}">Registration Review</a></li>{% endif %}
+{% if user.role == "EVALUATION" %}<li class="nav-item"><a class="nav-link" href="{% url 'tender_evaluation' %}">Tender Evaluation</a></li>{% endif %}
+{% if user.role == "APPROVAL" %}<li class="nav-item"><a class="nav-link" href="{% url 'approval_workflow' %}">Approval Workflow</a></li>{% endif %}
+{% if user.role == "ADMIN" %}<li class="nav-item"><a class="nav-link" href="{% url 'administration' %}">Administration</a></li>{% endif %}
+<li class="nav-item"><a class="nav-link" href="{% url 'audit_notifications' %}">Audit & Notifications</a></li>
+</ul><span class="navbar-text me-3">{{ user.username }} - {{ user.get_role_display }}</span>
+<form method="post" action="{% url 'logout' %}">{% csrf_token %}<button class="btn btn-outline-light btn-sm">Logout</button></form>
+</div>{% endif %}
+</div></nav>
+<main class="container py-4">{% for message in messages %}<div class="alert alert-{{ message.tags|default:'info' }}">{{ message }}</div>{% endfor %}{% block content %}{% endblock %}</main>
+<footer class="border-top py-3 text-center text-muted small">Secure Tender Registration & Management System</footer>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body></html>

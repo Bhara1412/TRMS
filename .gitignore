@@ -1,0 +1,26 @@
+# Python environments and cache
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+
+# Credentials and local keys
+.env*
+.django-key
+*.key
+*.pem
+
+# Database, uploaded documents and backups
+*.sqlite3*
+media/
+backups/
+
+# Generated files and logs
+staticfiles/
+*.log
+
+# Editor and operating-system files
+.vscode/
+.idea/
+Thumbs.db
+.DS_Store

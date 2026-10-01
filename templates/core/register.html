@@ -1,0 +1,5 @@
+{% extends "base.html" %}{% block content %}
+<div class="row justify-content-center"><div class="col-lg-8"><div class="card shadow-sm"><div class="card-body p-4">
+<h2>Company Registration</h2><p class="text-muted">Registration must be reviewed before tender submission.</p>
+<form method="post" enctype="multipart/form-data">{% csrf_token %}{{ form.as_p }}<button class="btn btn-primary">Submit Registration</button> <a class="btn btn-link" href="{% url 'login' %}">Back</a></form>
+</div></div></div></div>{% endblock %}

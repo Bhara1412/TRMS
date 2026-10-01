@@ -1,0 +1,4 @@
+{% extends "base.html" %}{% block content %}<h2>Tender Submission</h2>
+{% if company.status != "APPROVED" %}<div class="alert alert-warning">Your company is {{ company.get_status_display }}. Submission is disabled until approval.</div>{% endif %}
+<div class="card mb-4"><div class="card-body"><form method="post" enctype="multipart/form-data">{% csrf_token %}{{ form.as_p }}<button class="btn btn-primary" {% if company.status != "APPROVED" %}disabled{% endif %}>Submit Tender</button></form></div></div>
+<h4>Previous Submissions</h4><table class="table"><tr><th>Tender</th><th>Status</th></tr>{% for s in submissions %}<tr><td>{{ s.tender }}</td><td>{{ s.get_status_display }}</td></tr>{% empty %}<tr><td colspan="2">No submissions.</td></tr>{% endfor %}</table>{% endblock %}
