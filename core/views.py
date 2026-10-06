@@ -1,7 +1,9 @@
 from django.contrib import messages
 from django.contrib.auth import login,logout
 from django.contrib.auth.decorators import login_required
-from django.db import IntegrityError,transaction
+from django.db import IntegrityError,OperationalError,transaction
+from django.utils import timezone
+from .hardening import decision_token, valid_decision, advance, StaleDecision, login_is_limited, record_login
 from django.shortcuts import get_object_or_404,redirect,render
 from django.views.decorators.http import require_POST
 from .forms import ApprovalForm,AdminUserForm,CompanyProfileForm,CompanyRegistrationForm,EvaluationForm,ReviewForm,SecureAuthenticationForm,TenderCategoryForm,TenderForm,TenderSubmissionForm
@@ -17,10 +19,24 @@ def login_view(request):
     if request.user.is_authenticated: return redirect("dashboard")
     form=SecureAuthenticationForm(request,data=request.POST or None)
     if request.method=="POST":
+        identifier=request.POST.get('username', '').strip()[:254]
+        # Normalise the email alias to the same throttle key as its username.
+        canonical=User.objects.filter(username=identifier).first()
+        if canonical is None and '@' in identifier:
+            matches=User.objects.filter(email__iexact=identifier)
+            if matches.count() == 1: canonical=matches.first()
+        account=canonical.username if canonical else identifier
+        if login_is_limited(request, account):
+            form.add_error(None, 'Too many attempts. Please wait 15 minutes before trying again.')
+            response=render(request, "core/login.html", {"form":form}, status=429)
+            response['Retry-After']='900'
+            return response
         if form.is_valid():
             login(request,form.get_user())
+            record_login(request, account, success=True)
             audit(request,"Successful login")
             return redirect("dashboard")
+        record_login(request, account)
         messages.error(request,"Invalid username or password.")
     return render(request,"core/login.html",{"form":form})
 
@@ -108,12 +124,23 @@ def registration_review(request,company_id=None):
     if company_id is None:
         return render(request,"core/registration_review_list.html",{"companies":Company.objects.filter(status=Company.Status.PENDING)})
     company=get_object_or_404(Company,pk=company_id)
-    form=ReviewForm(request.POST or None)
+    if company.status != Company.Status.PENDING:
+        messages.info(request,"This registration has already been reviewed.")
+        return redirect("registration_review")
+    form=ReviewForm(request.POST or None, initial={'decision_token':decision_token(request, company, 'review')})
     if request.method=="POST" and form.is_valid():
-        company.status=form.cleaned_data["decision"]; company.review_comment=form.cleaned_data["comment"]; company.save()
-        notify_user(company.representative,f"Company registration status: {company.get_status_display()}.")
-        audit(request,f"Company registration {company.status.lower()}",company)
-        messages.success(request,"Registration decision recorded."); return redirect("registration_review")
+        if not valid_decision(request, company, 'review', form.cleaned_data['decision_token']):
+            form.add_error(None, 'This review is stale or invalid. Reload the page.')
+        else:
+            try:
+                with transaction.atomic():
+                    advance(Company, company, form.cleaned_data['decision'], review_comment=form.cleaned_data['comment'], updated_at=timezone.now())
+                    notify_user(company.representative,f"Company registration status: {company.get_status_display()}.")
+                    audit(request,f"Company registration {company.status.lower()}",company)
+                messages.success(request,"Registration decision recorded.")
+                return redirect("registration_review")
+            except (StaleDecision, IntegrityError, OperationalError):
+                form.add_error(None, 'The decision could not be saved. Reload the page before retrying.')
     return render(request,"core/registration_review_detail.html",{"company":company,"form":form})
 
 # FR-06 Tender Evaluation
@@ -123,15 +150,22 @@ def tender_evaluation(request,submission_id=None):
         subs=TenderSubmission.objects.filter(status=TenderSubmission.Status.SUBMITTED).select_related("company","tender")
         return render(request,"core/evaluation_list.html",{"submissions":subs})
     s=get_object_or_404(TenderSubmission,pk=submission_id,status=TenderSubmission.Status.SUBMITTED)
-    form=EvaluationForm(request.POST or None)
+    form=EvaluationForm(request.POST or None, initial={'decision_token':decision_token(request, s, 'evaluation')})
     if request.method=="POST" and form.is_valid():
-        with transaction.atomic():
-            e=form.save(commit=False); e.submission=s; e.evaluator=request.user; e.save()
-            s.status=TenderSubmission.Status.EVALUATED; s.save(update_fields=["status"])
-            notify_roles([User.Role.APPROVAL],f"Submission {s.id} is ready for Level 1 approval.")
-            notify_user(s.company.representative,f"Tender {s.tender.reference_no} has been evaluated.")
-            audit(request,"Tender evaluated",s)
-        messages.success(request,"Evaluation completed."); return redirect("tender_evaluation")
+        if not valid_decision(request, s, 'evaluation', form.cleaned_data['decision_token']):
+            form.add_error(None, 'This evaluation is stale or invalid. Reload the page.')
+        else:
+            try:
+                with transaction.atomic():
+                    advance(TenderSubmission, s, TenderSubmission.Status.EVALUATED)
+                    e=form.save(commit=False); e.submission=s; e.evaluator=request.user; e.save()
+                    notify_roles([User.Role.APPROVAL],f"Submission {s.id} is ready for Level 1 approval.")
+                    notify_user(s.company.representative,f"Tender {s.tender.reference_no} has been evaluated.")
+                    audit(request,"Tender evaluated",s)
+                messages.success(request,"Evaluation completed.")
+                return redirect("tender_evaluation")
+            except (StaleDecision, IntegrityError, OperationalError):
+                form.add_error(None, 'The evaluation could not be saved. Reload the page before retrying.')
     return render(request,"core/evaluation_detail.html",{"submission":s,"form":form})
 
 # FR-07 Approval Workflow
@@ -143,18 +177,25 @@ def approval_workflow(request,submission_id=None):
     s=get_object_or_404(TenderSubmission,pk=submission_id)
     level={TenderSubmission.Status.EVALUATED:1,TenderSubmission.Status.LEVEL1:2,TenderSubmission.Status.LEVEL2:3}.get(s.status)
     if not level:
-        messages.error(request,"This submission is not currently eligible for approval."); return redirect("approval_workflow")
-    form=ApprovalForm(request.POST or None)
+        messages.error(request,"This submission is not currently eligible for approval.")
+        return redirect("approval_workflow")
+    form=ApprovalForm(request.POST or None, initial={'decision_token':decision_token(request, s, 'approval')})
     if request.method=="POST" and form.is_valid():
-        decision=form.cleaned_data["decision"]
-        with transaction.atomic():
-            ApprovalHistory.objects.create(submission=s,approver=request.user,level=level,decision=decision,comment=form.cleaned_data["comment"])
-            if decision==ApprovalHistory.Decision.REJECTED: s.status=TenderSubmission.Status.REJECTED
-            else: s.status={1:TenderSubmission.Status.LEVEL1,2:TenderSubmission.Status.LEVEL2,3:TenderSubmission.Status.APPROVED}[level]
-            s.save(update_fields=["status"])
-            notify_user(s.company.representative,f"Tender {s.tender.reference_no}: {s.get_status_display()}.")
-            audit(request,f"Approval Level {level}: {decision}",s)
-        messages.success(request,f"Level {level} decision recorded."); return redirect("approval_workflow")
+        if not valid_decision(request, s, 'approval', form.cleaned_data['decision_token']):
+            form.add_error(None, 'This approval is stale or invalid. Reload the page.')
+        else:
+            decision=form.cleaned_data['decision']
+            next_status=TenderSubmission.Status.REJECTED if decision==ApprovalHistory.Decision.REJECTED else {1:TenderSubmission.Status.LEVEL1,2:TenderSubmission.Status.LEVEL2,3:TenderSubmission.Status.APPROVED}[level]
+            try:
+                with transaction.atomic():
+                    advance(TenderSubmission, s, next_status)
+                    ApprovalHistory.objects.create(submission=s,approver=request.user,level=level,decision=decision,comment=form.cleaned_data['comment'])
+                    notify_user(s.company.representative,f"Tender {s.tender.reference_no}: {s.get_status_display()}.")
+                    audit(request,f"Approval Level {level}: {decision}",s)
+                messages.success(request,f"Level {level} decision recorded.")
+                return redirect("approval_workflow")
+            except (StaleDecision, IntegrityError, OperationalError):
+                form.add_error(None, 'The approval could not be saved. Reload the page before retrying.')
     return render(request,"core/approval_detail.html",{"submission":s,"form":form,"level":level})
 
 # FR-08 Administration

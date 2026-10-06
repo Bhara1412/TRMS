@@ -9,6 +9,8 @@ def role_required(*allowed_roles):
         @wraps(view_func)
         def wrapper(request,*args,**kwargs):
             if request.user.role not in allowed_roles:
+                from .services import audit
+                audit(request, "Role access denied")
                 messages.error(request,"You are not authorised to access that function.")
                 return redirect("dashboard")
             return view_func(request,*args,**kwargs)
@@ -16,5 +18,5 @@ def role_required(*allowed_roles):
     return decorator
 
 def client_ip(request):
-    forwarded=request.META.get("HTTP_X_FORWARDED_FOR")
-    return forwarded.split(",")[0].strip() if forwarded else request.META.get("REMOTE_ADDR")
+    from .hardening import peer_ip
+    return peer_ip(request)

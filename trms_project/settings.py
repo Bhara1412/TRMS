@@ -1,6 +1,6 @@
 from pathlib import Path
 BASE_DIR = Path(__file__).resolve().parent.parent
-SECRET_KEY = SECRET_KEY = (BASE_DIR / ".django-key").read_text(
+SECRET_KEY = (BASE_DIR / ".django-key").read_text(
     encoding="utf-8"
 ).strip()
 
@@ -21,6 +21,7 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    "core.middleware.AdminLoginThrottleMiddleware",
 ]
 ROOT_URLCONF = "trms_project.urls"
 TEMPLATES = [{
@@ -59,9 +60,13 @@ CSRF_COOKIE_HTTPONLY=True
 SESSION_COOKIE_SAMESITE="Lax"
 CSRF_COOKIE_SAMESITE="Lax"
 SESSION_COOKIE_AGE=1800
-SESSION_SAVE_EVERY_REQUEST=True
+# A fixed 30-minute session expiry avoids a SQLite session write on every request.
+SESSION_SAVE_EVERY_REQUEST=False
+AUTHENTICATION_BACKENDS=["core.backends.CurrentRoleBackend"]
 X_FRAME_OPTIONS="DENY"
 SECURE_CONTENT_TYPE_NOSNIFF=True
 SECURE_REFERRER_POLICY="strict-origin-when-cross-origin"
 FILE_UPLOAD_MAX_MEMORY_SIZE=5*1024*1024
 DATA_UPLOAD_MAX_MEMORY_SIZE=10*1024*1024
+DATA_UPLOAD_MAX_NUMBER_FILES=5
+DATA_UPLOAD_MAX_NUMBER_FIELDS=100

@@ -3,19 +3,18 @@ from django import forms
 from django.contrib.auth.forms import AuthenticationForm, UserCreationForm
 from .models import Company,TenderSubmission,Evaluation,User,Tender,TenderCategory
 
-ALLOWED_EXTENSIONS={".pdf",".doc",".docx"}
-MAX_FILE_SIZE=5*1024*1024
-
-def validate_upload(f):
-    if not f: return f
-    if Path(f.name).suffix.lower() not in ALLOWED_EXTENSIONS:
-        raise forms.ValidationError("Only PDF, DOC and DOCX files are allowed.")
-    if f.size > MAX_FILE_SIZE:
-        raise forms.ValidationError("File must not exceed 5 MB.")
-    return f
+from .uploads import validate_upload
 
 class SecureAuthenticationForm(AuthenticationForm):
-    username=forms.CharField(widget=forms.TextInput(attrs={"class":"form-control","autocomplete":"username"}))
+    def clean(self):
+        identifier = self.cleaned_data.get('username', '').strip()
+        if '@' in identifier and not User.objects.filter(username=identifier).exists():
+            matches = User.objects.filter(email__iexact=identifier)
+            if matches.count() == 1:
+                self.cleaned_data['username'] = matches.first().username
+        return super().clean()
+
+    username=forms.CharField(label="Username or email", widget=forms.TextInput(attrs={"class":"form-control","autocomplete":"username"}))
     password=forms.CharField(widget=forms.PasswordInput(attrs={"class":"form-control","autocomplete":"current-password"}))
 
 class CompanyRegistrationForm(UserCreationForm):
@@ -30,6 +29,11 @@ class CompanyRegistrationForm(UserCreationForm):
     class Meta:
         model=User
         fields=["username","email","password1","password2"]
+    def clean_email(self):
+        value = self.cleaned_data['email'].strip().lower()
+        if User.objects.filter(email__iexact=value).exists():
+            raise forms.ValidationError('This email address is already registered.')
+        return value
     def clean_ssm_certificate(self): return validate_upload(self.cleaned_data["ssm_certificate"])
     def clean_company_profile(self): return validate_upload(self.cleaned_data["company_profile"])
 
@@ -48,15 +52,18 @@ class TenderSubmissionForm(forms.ModelForm):
         return validate_upload(f) if f else f
 
 class EvaluationForm(forms.ModelForm):
+    decision_token=forms.CharField(widget=forms.HiddenInput)
     class Meta:
         model=Evaluation
         fields=["technical_score","financial_score","comments"]
 
 class ReviewForm(forms.Form):
+    decision_token=forms.CharField(widget=forms.HiddenInput)
     decision=forms.ChoiceField(choices=[("APPROVED","Approve"),("REJECTED","Reject")])
     comment=forms.CharField(widget=forms.Textarea(attrs={"rows":3}),required=False)
 
 class ApprovalForm(forms.Form):
+    decision_token=forms.CharField(widget=forms.HiddenInput)
     decision=forms.ChoiceField(choices=[("APPROVED","Approve"),("REJECTED","Reject")])
     comment=forms.CharField(widget=forms.Textarea(attrs={"rows":3}),required=False)
 

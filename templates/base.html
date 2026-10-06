@@ -1,30 +1,23 @@
 {% load static %}
-<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>{% block title %}TRMS{% endblock %}</title>
-<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-<link rel="stylesheet" href="{% static 'css/app.css' %}">
-</head>
-<body>
-<nav class="navbar navbar-expand-lg navbar-dark bg-dark"><div class="container">
-<a class="navbar-brand fw-bold" href="{% url 'dashboard' %}">TRMS</a>
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}TRMS{% endblock %} · Tender workspace</title><link rel="stylesheet" href="{% static 'css/app.css' %}"><script src="{% static 'js/app.js' %}" defer></script></head>
+<body class="{% if user.is_authenticated %}workspace{% else %}auth-page{% endif %}">
+<a class="skip-link" href="#main-content">Skip to content</a>
 {% if user.is_authenticated %}
-<button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#nav"><span class="navbar-toggler-icon"></span></button>
-<div class="collapse navbar-collapse" id="nav"><ul class="navbar-nav me-auto">
-<li class="nav-item"><a class="nav-link" href="{% url 'dashboard' %}">Dashboard</a></li>
-{% if user.role == "COMPANY" %}<li class="nav-item"><a class="nav-link" href="{% url 'company_profile' %}">Company Profile</a></li><li class="nav-item"><a class="nav-link" href="{% url 'tender_submission' %}">Tender Submission</a></li>{% endif %}
-{% if user.role == "PROCUREMENT" %}<li class="nav-item"><a class="nav-link" href="{% url 'registration_review' %}">Registration Review</a></li>{% endif %}
-{% if user.role == "EVALUATION" %}<li class="nav-item"><a class="nav-link" href="{% url 'tender_evaluation' %}">Tender Evaluation</a></li>{% endif %}
-{% if user.role == "APPROVAL" %}<li class="nav-item"><a class="nav-link" href="{% url 'approval_workflow' %}">Approval Workflow</a></li>{% endif %}
-{% if user.role == "ADMIN" %}<li class="nav-item"><a class="nav-link" href="{% url 'administration' %}">Administration</a></li>{% endif %}
-<li class="nav-item"><a class="nav-link" href="{% url 'audit_notifications' %}">Audit & Notifications</a></li>
-</ul><span class="navbar-text me-3">{{ user.username }} - {{ user.get_role_display }}</span>
-<form method="post" action="{% url 'logout' %}">{% csrf_token %}<button class="btn btn-outline-light btn-sm">Logout</button></form>
-</div>{% endif %}
-</div></nav>
-<main class="container py-4">{% for message in messages %}<div class="alert alert-{{ message.tags|default:'info' }}">{{ message }}</div>{% endfor %}{% block content %}{% endblock %}</main>
-<footer class="border-top py-3 text-center text-muted small">Secure Tender Registration & Management System</footer>
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-</body></html>
+<div class="sidebar-backdrop" data-close-menu></div><aside class="sidebar" id="sidebar" aria-label="Workspace navigation">
+<a class="brand" href="{% url 'dashboard' %}"><span class="brand-mark">T<span></span></span><span>TRMS<small>TENDER WORKSPACE</small></span></a>
+<div class="workspace-label"><span class="workspace-dot"></span> Management workspace</div><p class="nav-label">WORKSPACE</p>
+<nav>{% with route=request.resolver_match.url_name %}
+<a class="nav-link {% if route == 'dashboard' %}active{% endif %}" href="{% url 'dashboard' %}" {% if route == 'dashboard' %}aria-current="page"{% endif %}><span class="nav-icon" aria-hidden="true">▦</span>Overview</a>
+{% if user.role == 'COMPANY' %}<a class="nav-link {% if route == 'company_profile' %}active{% endif %}" href="{% url 'company_profile' %}"><span class="nav-icon" aria-hidden="true">▣</span>Company profile</a><a class="nav-link {% if route == 'tender_submission' %}active{% endif %}" href="{% url 'tender_submission' %}"><span class="nav-icon" aria-hidden="true">↗</span>Tender submission</a>{% endif %}
+{% if user.role == 'PROCUREMENT' %}<a class="nav-link {% if 'registration_review' in route %}active{% endif %}" href="{% url 'registration_review' %}"><span class="nav-icon" aria-hidden="true">▤</span>Registration review</a>{% endif %}
+{% if user.role == 'EVALUATION' %}<a class="nav-link {% if 'tender_evaluation' in route %}active{% endif %}" href="{% url 'tender_evaluation' %}"><span class="nav-icon" aria-hidden="true">◈</span>Tender evaluation</a>{% endif %}
+{% if user.role == 'APPROVAL' %}<a class="nav-link {% if 'approval_workflow' in route %}active{% endif %}" href="{% url 'approval_workflow' %}"><span class="nav-icon" aria-hidden="true">◇</span>Approval workflow</a>{% endif %}
+{% if user.role == 'ADMIN' %}<a class="nav-link {% if route == 'administration' %}active{% endif %}" href="{% url 'administration' %}"><span class="nav-icon" aria-hidden="true">⚙</span>Administration</a>{% endif %}
+<p class="nav-label">ACTIVITY</p><a class="nav-link {% if route == 'audit_notifications' %}active{% endif %}" href="{% url 'audit_notifications' %}"><span class="nav-icon" aria-hidden="true">◷</span>Audit & notifications</a>{% endwith %}</nav>
+<div class="sidebar-bottom"><div class="security-note"><span aria-hidden="true">◇</span><div>Controlled access<small>Every decision, accounted for.</small></div></div><div class="sidebar-user"><span class="avatar">{{ user.username|slice:':1'|upper }}</span><div>{{ user.username }}<small>{{ user.get_role_display }}</small></div></div><form method="post" action="{% url 'logout' %}">{% csrf_token %}<button class="signout">Sign out <span aria-hidden="true">↗</span></button></form></div>
+</aside><div class="app-main"><header class="topbar"><div class="topbar-start"><button class="menu-toggle" aria-label="Open navigation" aria-controls="sidebar" aria-expanded="false">☰</button><span class="breadcrumb">Workspace <span>/</span> {% block page_title %}Overview{% endblock %}</span></div><div class="topbar-end"><a class="notification-link" href="{% url 'audit_notifications' %}" aria-label="View notifications">◷</a><span class="role-tag">{{ user.get_role_display }}</span><span class="avatar avatar-light" aria-hidden="true">{{ user.username|slice:':1'|upper }}</span></div></header>
+{% else %}<header class="auth-topbar"><a class="brand" href="{% url 'login' %}"><span class="brand-mark">T<span></span></span><span>TRMS<small>TENDER WORKSPACE</small></span></a><span class="auth-topbar-caption">Tender Registration & Management System</span></header>{% endif %}
+<main id="main-content" class="{% if user.is_authenticated %}page-content{% else %}auth-content{% endif %}">
+{% if messages %}<div class="messages" aria-live="polite">{% for message in messages %}<div class="alert alert-{{ message.tags|default:'info' }}" role="status">{{ message }}</div>{% endfor %}</div>{% endif %}
+{% block content %}{% endblock %}</main><footer class="page-footer"><span>TRMS · Tender Registration & Management System</span><span>Clear decisions. Connected workflows.</span></footer>{% if user.is_authenticated %}</div>{% endif %}</body></html>

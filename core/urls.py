@@ -1,6 +1,8 @@
 from django.urls import path
 from . import views
+from .documents import document_download
 urlpatterns=[
+    path("documents/<str:kind>/<int:object_id>/<str:field_name>/",document_download,name="document_download"),
     path("",views.home,name="home"),
     path("login/",views.login_view,name="login"),
     path("logout/",views.logout_view,name="logout"),
